@@ -23,6 +23,7 @@ def main():
             break
         frame = cv2.flip(frame, 1)
         faces = face_detector.detect_faces(frame)
+        print(f"Detected {len(faces)} faces.")
         for face in faces:
             x, y, w, h = face['bbox']
             if w < 30 or h < 30 or x < 0 or y < 0:
@@ -32,10 +33,13 @@ def main():
             w = min(w, frame.shape[1] - x)
             h = min(h, frame.shape[0] - y)
             face_img = frame[y:y+h, x:x+w]
-            if face_img.size > 0:
+            if face_img is not None and face_img.size > 0:
+                print(f"Processing face at ({x},{y},{w},{h})")
                 emotion, confidence = emotion_detector.predict_emotion(face_img)
                 face_detector.draw_faces(frame, [face])
                 cv2.putText(frame, f"{emotion}", (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,255,0), 2)
+            else:
+                print(f"Skipped empty face image at ({x},{y},{w},{h})")
         cv2.imshow('Face & Emotion Detection', frame)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
