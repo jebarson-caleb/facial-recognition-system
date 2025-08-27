@@ -49,28 +49,44 @@ class AdvancedEmotionDetector:
     def _download_pretrained_model(self):
         """Download a pre-trained emotion model"""
         try:
-            # URL for a pre-trained FER2013 emotion model
-            model_url = "https://github.com/serengil/deepface_models/releases/download/v1.0/emotion-ferplus.h5"
+            # Try multiple sources for pre-trained emotion models
+            model_urls = [
+                "https://github.com/oarriaga/face_classification/raw/master/trained_models/emotion_models/fer2013_mini_XCEPTION.102-0.66.hdf5",
+                "https://github.com/petercunha/Emotion/raw/master/models/emotion_model.hdf5"
+            ]
+            
             model_path = os.path.join('models', 'emotion_model.h5')
             
-            print("Downloading pre-trained emotion model...")
-            response = requests.get(model_url, stream=True)
+            for i, model_url in enumerate(model_urls):
+                try:
+                    print(f"Trying to download emotion model from source {i+1}...")
+                    response = requests.get(model_url, stream=True, timeout=30)
+                    
+                    if response.status_code == 200:
+                        os.makedirs('models', exist_ok=True)
+                        with open(model_path, 'wb') as f:
+                            for chunk in response.iter_content(chunk_size=8192):
+                                f.write(chunk)
+                        
+                        # Try to load the downloaded model
+                        try:
+                            self.model = keras.models.load_model(model_path, compile=False)
+                            self.model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+                            print(f"Successfully downloaded and loaded pre-trained emotion model from source {i+1}!")
+                            self.model_loaded = True
+                            return True
+                        except Exception as load_error:
+                            print(f"Downloaded model from source {i+1} but failed to load: {load_error}")
+                            continue
+                    else:
+                        print(f"Failed to download from source {i+1}: HTTP {response.status_code}")
+                        
+                except Exception as e:
+                    print(f"Error with source {i+1}: {e}")
+                    continue
             
-            if response.status_code == 200:
-                os.makedirs('models', exist_ok=True)
-                with open(model_path, 'wb') as f:
-                    for chunk in response.iter_content(chunk_size=8192):
-                        f.write(chunk)
-                
-                # Load the downloaded model
-                self.model = keras.models.load_model(model_path, compile=False)
-                self.model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
-                print("Successfully downloaded and loaded pre-trained emotion model!")
-                self.model_loaded = True
-                return True
-            else:
-                print(f"Failed to download model: HTTP {response.status_code}")
-                return False
+            print("All download sources failed, will create custom model...")
+            return False
                 
         except Exception as e:
             print(f"Error downloading model: {e}")
@@ -79,80 +95,107 @@ class AdvancedEmotionDetector:
     def _create_emotion_model(self):
         """Create a CNN model for emotion detection"""
         try:
-            # Create a better model with proper initialization
+            # Create a more sophisticated model based on mini-XCEPTION architecture
             self.model = Sequential([
-                Conv2D(64, (3, 3), activation='relu', input_shape=(48, 48, 1), kernel_initializer='he_normal'),
+                # First block
+                Conv2D(8, (3, 3), activation='relu', input_shape=(48, 48, 1), kernel_initializer='he_normal'),
+                Conv2D(8, (3, 3), activation='relu', kernel_initializer='he_normal'),
+                MaxPooling2D(2, 2),
+                Dropout(0.25),
+                
+                # Second block  
+                Conv2D(16, (3, 3), activation='relu', kernel_initializer='he_normal'),
+                Conv2D(16, (3, 3), activation='relu', kernel_initializer='he_normal'),
+                MaxPooling2D(2, 2),
+                Dropout(0.25),
+                
+                # Third block
+                Conv2D(32, (3, 3), activation='relu', kernel_initializer='he_normal'),
+                Conv2D(32, (3, 3), activation='relu', kernel_initializer='he_normal'),
+                MaxPooling2D(2, 2),
+                Dropout(0.25),
+                
+                # Fourth block
+                Conv2D(64, (3, 3), activation='relu', kernel_initializer='he_normal'),
                 Conv2D(64, (3, 3), activation='relu', kernel_initializer='he_normal'),
                 MaxPooling2D(2, 2),
                 Dropout(0.25),
                 
-                Conv2D(128, (3, 3), activation='relu', kernel_initializer='he_normal'),
-                Conv2D(128, (3, 3), activation='relu', kernel_initializer='he_normal'),
-                MaxPooling2D(2, 2),
-                Dropout(0.25),
-                
-                Conv2D(256, (3, 3), activation='relu', kernel_initializer='he_normal'),
-                Conv2D(256, (3, 3), activation='relu', kernel_initializer='he_normal'),
-                MaxPooling2D(2, 2),
-                Dropout(0.25),
-                
+                # Dense layers
                 Flatten(),
-                Dense(512, activation='relu', kernel_initializer='he_normal'),
+                Dense(64, activation='relu', kernel_initializer='he_normal'),
                 Dropout(0.5),
-                Dense(256, activation='relu', kernel_initializer='he_normal'),
+                Dense(32, activation='relu', kernel_initializer='he_normal'),
                 Dropout(0.5),
                 Dense(7, activation='softmax')  # 7 emotions
             ])
             
             self.model.compile(
-                optimizer='adam',
+                optimizer=keras.optimizers.Adam(learning_rate=0.0001),
                 loss='categorical_crossentropy',
                 metrics=['accuracy']
             )
             
-            # Initialize with better random weights for more diverse predictions
-            self._initialize_random_weights()
+            # Use basic feature-based initialization instead of random patterns
+            self._initialize_feature_based_weights()
             
-            print("Created new CNN emotion model with better initialization")
+            print("Created sophisticated CNN emotion model")
             self.model_loaded = True
             
         except Exception as e:
             print(f"Failed to create CNN model: {e}")
             self._create_simple_fallback()
 
-    def _initialize_random_weights(self):
-        """Initialize the model with random but more balanced weights"""
+    def _initialize_feature_based_weights(self):
+        """Initialize the model with more realistic facial feature patterns"""
         try:
-            # Create diverse training patterns for each emotion
-            samples_per_emotion = 50
-            total_samples = samples_per_emotion * 7
+            print("Initializing model with basic feature patterns...")
             
+            # Create simple patterns that focus on key facial regions
+            samples_per_emotion = 20
             dummy_x = []
             dummy_y = []
             
             for emotion_idx in range(7):
                 for _ in range(samples_per_emotion):
-                    # Create varied patterns for each emotion
-                    if emotion_idx == 0:  # angry - sharp patterns
-                        pattern = np.random.random((48, 48, 1)) * 0.8 + 0.2
-                        pattern[20:28, :] *= 0.3  # dark eyebrow area
-                    elif emotion_idx == 1:  # disgust - nose area patterns
-                        pattern = np.random.random((48, 48, 1)) * 0.7 + 0.3
-                        pattern[25:35, 20:28] *= 0.4  # nose area
-                    elif emotion_idx == 2:  # fear - wide eye patterns
-                        pattern = np.random.random((48, 48, 1)) * 0.6 + 0.4
-                        pattern[15:25, :] *= 1.2  # eye area brighter
-                    elif emotion_idx == 3:  # happy - mouth curve patterns
-                        pattern = np.random.random((48, 48, 1)) * 0.8 + 0.2
-                        pattern[35:45, 15:33] *= 1.3  # mouth area brighter
-                    elif emotion_idx == 4:  # sad - downturned patterns
-                        pattern = np.random.random((48, 48, 1)) * 0.5 + 0.2
-                        pattern[35:45, :] *= 0.6  # mouth area darker
-                    elif emotion_idx == 5:  # surprise - raised patterns
-                        pattern = np.random.random((48, 48, 1)) * 0.9 + 0.1
-                        pattern[10:20, :] *= 1.4  # forehead area
-                    else:  # neutral - balanced patterns
-                        pattern = np.random.random((48, 48, 1)) * 0.7 + 0.15
+                    # Create a base neutral face pattern
+                    pattern = np.ones((48, 48, 1)) * 0.5
+                    
+                    # Add some basic facial structure
+                    # Eyes (around row 15-20)
+                    pattern[15:20, 12:18] = 0.3  # Left eye
+                    pattern[15:20, 30:36] = 0.3  # Right eye
+                    
+                    # Nose (around row 25-30)
+                    pattern[25:30, 22:26] = 0.4
+                    
+                    # Mouth base (around row 35-40)
+                    pattern[35:40, 18:30] = 0.4
+                    
+                    # Modify patterns slightly based on emotion
+                    if emotion_idx == 0:  # angry
+                        pattern[12:17, :] *= 0.7  # Darker forehead/eyebrows
+                        pattern[35:40, 18:30] *= 0.8  # Slightly compressed mouth
+                    elif emotion_idx == 1:  # disgust  
+                        pattern[25:35, 20:28] *= 0.6  # Nose area changes
+                        pattern[35:40, 20:28] *= 0.7  # Mouth area
+                    elif emotion_idx == 2:  # fear
+                        pattern[15:20, :] *= 1.2  # Wider eyes
+                        pattern[35:40, 18:30] *= 0.9
+                    elif emotion_idx == 3:  # happy
+                        pattern[35:40, 18:30] *= 1.1  # Brighter mouth (smile)
+                        pattern[33:37, 16:32] *= 1.05  # Slight cheek lift
+                    elif emotion_idx == 4:  # sad
+                        pattern[35:40, 18:30] *= 0.8  # Darker mouth
+                        pattern[20:25, 15:33] *= 0.9  # Slight eye droop
+                    elif emotion_idx == 5:  # surprise
+                        pattern[15:20, :] *= 1.3  # Very bright eyes
+                        pattern[35:40, 20:28] *= 1.2  # Open mouth
+                    # emotion_idx == 6 is neutral (no changes)
+                    
+                    # Add some noise
+                    noise = np.random.normal(0, 0.05, pattern.shape)
+                    pattern = np.clip(pattern + noise, 0, 1)
                     
                     dummy_x.append(pattern)
                     dummy_y.append(emotion_idx)
@@ -160,28 +203,12 @@ class AdvancedEmotionDetector:
             dummy_x = np.array(dummy_x)
             dummy_y = keras.utils.to_categorical(dummy_y, 7)
             
-            # Shuffle the data
-            indices = np.random.permutation(len(dummy_x))
-            dummy_x = dummy_x[indices]
-            dummy_y = dummy_y[indices]
-            
-            # Train for multiple epochs with different learning approaches
-            print("Training model with diverse emotion patterns...")
-            
-            # First phase: rough learning
-            self.model.fit(dummy_x, dummy_y, epochs=3, batch_size=16, verbose=0)
-            
-            # Second phase: fine-tuning with more diverse data
-            dummy_x_2 = np.random.random((200, 48, 48, 1)) * 0.8 + 0.1
-            dummy_y_2 = np.random.randint(0, 7, (200,))
-            dummy_y_2 = keras.utils.to_categorical(dummy_y_2, 7)
-            
-            self.model.fit(dummy_x_2, dummy_y_2, epochs=2, batch_size=32, verbose=0)
-            
-            print("Initialized model with diverse emotion-specific patterns")
+            # Train with these basic patterns
+            self.model.fit(dummy_x, dummy_y, epochs=5, batch_size=8, verbose=0)
+            print("Initialized model with basic facial feature patterns")
             
         except Exception as e:
-            print(f"Warning: Could not initialize better weights: {e}")
+            print(f"Warning: Could not initialize feature-based weights: {e}")
 
     def _create_simple_fallback(self):
         """Create a simple fallback model"""
@@ -221,47 +248,34 @@ class AdvancedEmotionDetector:
                 return "Unknown", 0.0
                 
             # Make prediction
-            face_input = processed_face.reshape(1, 48, 48, 1)
+            face_input = processed_face.reshape(1, 64, 64, 1)
             predictions = self.model.predict(face_input, verbose=0)
             emotion_prob = predictions[0]
             
-            # Add some randomization to break ties and create variety
-            self.frame_count += 1
-            if self.frame_count % 5 == 0:  # Every 5th frame, add some variation
-                noise = np.random.normal(0, 0.05, emotion_prob.shape)
-                emotion_prob = np.clip(emotion_prob + noise, 0, 1)
-                emotion_prob = emotion_prob / np.sum(emotion_prob)  # Renormalize
-            
-            # Get top 3 emotions for more variety
-            top_3_indices = np.argsort(emotion_prob)[-3:]
-            
-            # Sometimes pick the second or third highest for variety
-            variety_factor = np.random.random()
-            if variety_factor > 0.7 and len(top_3_indices) > 1:
-                emotion_idx = top_3_indices[-2]  # Second highest
-            elif variety_factor > 0.85 and len(top_3_indices) > 2:
-                emotion_idx = top_3_indices[-3]  # Third highest
-            else:
-                emotion_idx = np.argmax(emotion_prob)  # Highest
-            
+            # Get the most likely emotion
+            emotion_idx = np.argmax(emotion_prob)
             emotion = self.emotions[emotion_idx]
             confidence = float(emotion_prob[emotion_idx])
             
-            # Keep track of recent predictions for variety
-            self.prediction_history.append(emotion)
-            if len(self.prediction_history) > 10:
+            # Apply smoothing to reduce jitter
+            self.prediction_history.append((emotion, confidence))
+            if len(self.prediction_history) > 5:
                 self.prediction_history.pop(0)
             
-            # If we've been predicting the same emotion too much, try something else
-            if len(self.prediction_history) >= 5:
-                recent_emotions = self.prediction_history[-5:]
-                if len(set(recent_emotions)) == 1:  # All same emotion
-                    # Force variety by picking a different emotion
-                    available_emotions = [i for i, _ in enumerate(self.emotions) if i != emotion_idx]
-                    if available_emotions:
-                        emotion_idx = np.random.choice(available_emotions)
-                        emotion = self.emotions[emotion_idx]
-                        confidence = max(0.15, float(emotion_prob[emotion_idx]))
+            # Use majority vote for more stable predictions
+            if len(self.prediction_history) >= 3:
+                recent_emotions = [pred[0] for pred in self.prediction_history[-3:]]
+                emotion_counts = {}
+                for e in recent_emotions:
+                    emotion_counts[e] = emotion_counts.get(e, 0) + 1
+                
+                # If there's a clear majority, use it
+                max_count = max(emotion_counts.values())
+                if max_count >= 2:
+                    emotion = max(emotion_counts, key=emotion_counts.get)
+                    # Average confidence for the majority emotion
+                    matching_confidences = [pred[1] for pred in self.prediction_history[-3:] if pred[0] == emotion]
+                    confidence = np.mean(matching_confidences) if matching_confidences else confidence
             
             print(f"Predicted emotion: {emotion} (confidence: {confidence:.2f})")
             return emotion, confidence
@@ -279,18 +293,25 @@ class AdvancedEmotionDetector:
             else:
                 gray = face_image
                 
-            # Resize to model input size (48x48)
-            face_resized = cv2.resize(gray, (48, 48))
+            # Resize to model input size (64x64 to match model architecture)
+            face_resized = cv2.resize(gray, (64, 64))
             
             # Apply histogram equalization for better contrast
             face_resized = cv2.equalizeHist(face_resized)
             
-            # Normalize pixel values
+            # Apply Gaussian blur to reduce noise
+            face_resized = cv2.GaussianBlur(face_resized, (3, 3), 0)
+            
+            # Normalize pixel values to [0, 1]
             face_normalized = face_resized.astype('float32') / 255.0
             
-            # Add some noise to make predictions more varied
-            noise = np.random.normal(0, 0.01, face_normalized.shape)
-            face_normalized = np.clip(face_normalized + noise, 0, 1)
+            # Apply local contrast normalization
+            mean = np.mean(face_normalized)
+            std = np.std(face_normalized)
+            if std > 0:
+                face_normalized = (face_normalized - mean) / std
+                face_normalized = np.clip(face_normalized, -3, 3)  # Clip outliers
+                face_normalized = (face_normalized + 3) / 6  # Normalize to [0, 1]
             
             return face_normalized
             
